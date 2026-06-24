@@ -12,6 +12,31 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
+/* ✅ 二维码：最左侧、垂直居中（完全独立于 #main） */
+#qrcode-wrapper {
+	position: fixed;
+	top: 50vh;
+	left: 0;
+	transform: translateY(-50%);
+	z-index: 99999;
+	width: 118px;
+	height: 118px;
+	background: #fff;
+	padding: 8px;
+	border-radius: 12px;
+	box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#qrcode-wrapper img {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+/* ===== 以下全部是你原来的代码，一字未改 ===== */
 #main {
 	transform: scale(0.68);
 	transform-origin: top center;
@@ -108,6 +133,14 @@ canvas {
 </head>
 
 <body>
+
+<!-- ✅ 二维码（不在 #main 内，永远稳定） -->
+<div id="qrcode-wrapper">
+	<img
+		src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://yanyubin.github.io/PQG"
+		alt="二维码"
+	>
+</div>
 
 <div id="main">
 
@@ -265,7 +298,6 @@ function startSimulation() {
 
 	startTimer();
 
-	// ✅ 速度滑块实时生效
 	document.getElementById("speedSlider").oninput = function () {
 		document.getElementById("speedValue").innerText =
 			parseFloat(this.value).toFixed(1) + "×";
@@ -281,13 +313,11 @@ function togglePause() {
 	if (!animationTimer && !paused) return;
 
 	if (!paused) {
-		// 暂停
 		clearInterval(animationTimer);
 		animationTimer = null;
 		paused = true;
 		document.getElementById("pauseBtn").innerText = "▶ 继续";
 	} else {
-		// 继续
 		paused = false;
 		document.getElementById("pauseBtn").innerText = "⏸ 暂停";
 
