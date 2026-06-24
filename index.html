@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 
-<!-- ✅ 手机 App 化（关键） -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -13,7 +12,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-/* ✅ 整体微缩（关键） */
 #main {
 	transform: scale(0.68);
 	transform-origin: top center;
@@ -35,11 +33,14 @@ h2 {
 .controls {
 	margin-left: 20px;
 	margin-bottom: 10px;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
 }
 
 label {
 	font-size: 22px;
-	margin-right: 12px;
 }
 
 input {
@@ -54,7 +55,28 @@ button {
 	cursor: pointer;
 }
 
-/* ✅ 16:9 锁定 */
+#speed-control {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 22px;
+}
+
+#speedSlider {
+	width: 180px;
+}
+
+#speedValue {
+	font-weight: bold;
+	min-width: 60px;
+}
+
+#pauseBtn {
+	font-size: 22px;
+	padding: 12px 24px;
+	cursor: pointer;
+}
+
 #chart-container {
 	width: 92vw;
 	aspect-ratio: 16 / 9;
@@ -93,18 +115,29 @@ canvas {
 
 <div class="controls">
 	<label>p₀:
-		<input type="number" id="p0" value="0.07" step="0.1" min="0" max="1">
+		<input type="number" id="p0" value="0.07" step="0.05" min="0" max="1">
 	</label>
+
 	<label>N:
 		<input type="number" id="N" value="7" min="1">
 	</label>
+
 	<label>代数 T:
 		<input type="number" id="T" value="50" min="1">
 	</label>
+
 	<label>模拟次数:
-		<input type="number" id="runs" value="100" min="1" max="1000">
+		<input type="number" id="runs" value="100" min="1" max="2000">
 	</label>
+
+	<div id="speed-control">
+		<label for="speedSlider">速度:</label>
+		<input type="range" id="speedSlider" min="0.2" max="1" step="0.1" value="1">
+		<span id="speedValue">1×</span>
+	</div>
+
 	<button onclick="startSimulation()">▶ 开始模拟</button>
+	<button id="pauseBtn" onclick="togglePause()">⏸ 暂停</button>
 </div>
 
 <div id="chart-container">
@@ -121,7 +154,10 @@ canvas {
 
 <script>
 let chart;
-let animationTimer;
+let animationTimer = null;
+
+let paused = false;
+let lastInterval = null;
 
 function startSimulation() {
 	const p0 = parseFloat(document.getElementById("p0").value);
@@ -131,6 +167,9 @@ function startSimulation() {
 
 	if (chart) chart.destroy();
 	clearInterval(animationTimer);
+
+	paused = false;
+	document.getElementById("pauseBtn").innerText = "⏸ 暂停";
 
 	document.getElementById("fixed").innerText = 0;
 	document.getElementById("lost").innerText = 0;
@@ -144,7 +183,7 @@ function startSimulation() {
 			label: "Run " + (r + 1),
 			data: [p0],
 			borderColor: colors[r],
-			borderWidth: 3,
+			borderWidth: 4,
 			fill: false,
 			pointRadius: 0,
 			tension: 0.25
@@ -187,11 +226,14 @@ function startSimulation() {
 	});
 
 	let gen = 0;
-	animationTimer = setInterval(() => {
+
+	function tick() {
 		if (gen >= T) {
 			clearInterval(animationTimer);
+			animationTimer = null;
 			return;
 		}
+
 		gen++;
 		chart.data.labels.push(gen);
 
@@ -213,8 +255,79 @@ function startSimulation() {
 		document.getElementById("fixed").innerText = fixed;
 		document.getElementById("lost").innerText = lost;
 		document.getElementById("polymorphic").innerText = poly;
+	}
 
-	}, 60);
+	function startTimer() {
+		const speed = parseFloat(document.getElementById("speedSlider").value);
+		lastInterval = Math.round(60 / speed);
+		animationTimer = setInterval(tick, lastInterval);
+	}
+
+	startTimer();
+
+	// ✅ 速度滑块实时生效
+	document.getElementById("speedSlider").oninput = function () {
+		document.getElementById("speedValue").innerText =
+			parseFloat(this.value).toFixed(1) + "×";
+
+		if (!paused && animationTimer) {
+			clearInterval(animationTimer);
+			startTimer();
+		}
+	};
+}
+
+function togglePause() {
+	if (!animationTimer && !paused) return;
+
+	if (!paused) {
+		// 暂停
+		clearInterval(animationTimer);
+		animationTimer = null;
+		paused = true;
+		document.getElementById("pauseBtn").innerText = "▶ 继续";
+	} else {
+		// 继续
+		paused = false;
+		document.getElementById("pauseBtn").innerText = "⏸ 暂停";
+
+		const speed = parseFloat(document.getElementById("speedSlider").value);
+		const interval = Math.round(60 / speed);
+
+		let gen = chart.data.labels.length - 1;
+		const T = parseInt(document.getElementById("T").value);
+		const N = parseInt(document.getElementById("N").value);
+
+		animationTimer = setInterval(function tick() {
+			if (gen >= T) {
+				clearInterval(animationTimer);
+				animationTimer = null;
+				return;
+			}
+
+			gen++;
+			chart.data.labels.push(gen);
+
+			let fixed = 0, lost = 0, poly = 0;
+
+			chart.data.datasets.forEach(ds => {
+				const last = ds.data[ds.data.length - 1];
+				const countA = binomialSample(2 * N, last);
+				const freq = countA / (2 * N);
+				ds.data.push(freq);
+
+				if (freq === 1) fixed++;
+				else if (freq === 0) lost++;
+				else poly++;
+			});
+
+			chart.update();
+
+			document.getElementById("fixed").innerText = fixed;
+			document.getElementById("lost").innerText = lost;
+			document.getElementById("polymorphic").innerText = poly;
+		}, interval);
+	}
 }
 
 function binomialSample(n, p) {
@@ -230,7 +343,7 @@ function generateColors(n) {
 		"#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6",
 		"#1abc9c","#d35400","#c0392b","#2980b9","#27ae60"
 	];
-	return Array.from({length: n}, (_, i) => palette[i % palette.length]);
+	return Array.from({ length: n }, (_, i) => palette[i % palette.length]);
 }
 </script>
 
